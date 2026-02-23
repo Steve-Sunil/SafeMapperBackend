@@ -3,9 +3,18 @@ import requests
 from gdacs.api import GDACSAPIReader
 from math import radians, cos, sin, sqrt, atan2
 from datetime import datetime
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 gdacs_client = GDACSAPIReader()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # -----------------------------
 # Utility: Distance Calculator
