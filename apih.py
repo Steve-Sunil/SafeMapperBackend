@@ -179,11 +179,11 @@ def calculate_risk(lat: float, lon: float, userReports: float = 0):
 
     return {
          
-        "incidentDensity": incidentDensity,
-        "roadIsolation": roadIsolation,
-        "weatherSeverity": weatherSeverity,
-        "poiDensityInverse": poiDensityInverse,
-        "nightFactor": nightFactor,
-        "userReports": userReports,
+        "incidentDensity": float(incidentDensity),
+        "roadIsolation": float(roadIsolation),
+        "weatherSeverity": float(weatherSeverity),
+        "poiDensityInverse": float(poiDensityInverse),
+        "nightFactor": float(nightFactor),
+        "userReports": float(userReports),
         "finalRiskScore": round(risk, 3)
     }
