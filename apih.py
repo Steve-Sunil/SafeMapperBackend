@@ -124,14 +124,38 @@ def get_poi_inverse(lat, lon):
 # -----------------------------
 # 5️⃣ Night Factor
 # -----------------------------
+
 def get_night_factor(daily_data):
-    sunrise = daily_data["sunrise"][0]
-    sunset = daily_data["sunset"][0]
+    sunrise_str = daily_data["sunrise"][0]
+    sunset_str = daily_data["sunset"][0]
 
-    now = datetime.now().isoformat()
+    # Convert to datetime
+    sunrise = datetime.fromisoformat(sunrise_str)
+    sunset = datetime.fromisoformat(sunset_str)
 
-    return 1 if now > sunset or now < sunrise else 0
+    now = datetime.now(sunrise.tzinfo)
 
+    # Convert everything to minutes since midnight
+    def to_minutes(dt):
+        return dt.hour * 60 + dt.minute
+
+    now_m = to_minutes(now)
+    sunrise_m = to_minutes(sunrise)
+    sunset_m = to_minutes(sunset)
+
+    # Solar noon
+    noon_m = (sunrise_m + sunset_m) / 2
+
+    # Distance from noon
+    distance = abs(now_m - noon_m)
+
+    # Maximum possible distance in a day
+    max_distance = 720  # 12 hours
+
+    # Normalize 0–1
+    night_factor = min(distance / max_distance, 1)
+
+    return round(night_factor, 3)
 
 # -----------------------------
 # MAIN RISK ENDPOINT
