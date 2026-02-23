@@ -4,6 +4,9 @@ from gdacs.api import GDACSAPIReader
 from math import radians, cos, sin, sqrt, atan2
 from datetime import datetime, timezone
 from fastapi.middleware.cors import CORSMiddleware
+import polyline
+import asyncio
+import time
 
 app = FastAPI()
 gdacs_client = GDACSAPIReader()
@@ -124,3 +127,90 @@ async def calculate_risk(lat: float, lon: float, userReports: float = 0):
         "userReports": float(userReports),
         "finalRiskScore": round(float(risk), 3)
     }
+
+cache = {"weather": None, "gdacs": None, "last_update": 0}
+
+startlt = 0.0
+startln = 0.0
+endlt = 0.0
+endln = 0.0
+
+@app.post("/get-cords")
+async def get_cords(start_lat: float, start_lon: float, end_lat: float, end_lon: float):
+    global startlt, startln, endlt, endln
+    startlt = start_lat
+    startln = start_lon
+    endlt = end_lat
+    endln = end_lon
+    # Added a print here so you can see the update in your terminal
+    print(f"Cords Updated: {startlt}, {startln} to {endlt}, {endln}")
+    return {"status": "success", "message": "Coordinates updated"}
+
+@app.get("/find-safest-route")
+async def find_safest_route():
+    global startlt, startln, endlt, endln
+    
+    # Safety Check: Prevent the API from calling GraphHopper with 0,0
+    if startlt == 0.0 or startln == 0.0:
+        raise HTTPException(
+            status_code=400, 
+            detail="Coordinates not set. Please call /get-cords first."
+        )
+
+    GRAPHHOPPER_KEY = "88686f8e-8373-4adb-8e3e-00202083def0"
+    
+    # 1. Get Routes Instantly
+    gh_url = "https://graphhopper.com/api/1/route"
+    gh_params = {
+        "point": [f"{startlt},{startln}", f"{endlt},{endln}"],
+        "profile": "car",
+        "algorithm": "alternative_route",
+        "instructions": "false",
+        "key": GRAPHHOPPER_KEY
+    }
+    
+    try:
+        gh_response = requests.get(gh_url, params=gh_params)
+        gh_data = gh_response.json()
+        
+        if "paths" not in gh_data:
+            # Check if GraphHopper returned an error message
+            error_detail = gh_data.get("message", "No routes found")
+            raise HTTPException(status_code=400, detail=error_detail)
+
+        # 2. Fetch Area Data ONCE
+        weather_severity, daily_data = get_weather_severity(startlt, startln)
+        incident_density = get_incident_density(startlt, startln)
+        night_factor = get_night_factor(daily_data)
+
+        routes_analysis = []
+
+        for idx, path in enumerate(gh_data["paths"]):
+            full_coords = polyline.decode(path["points"])
+            
+            # Sampling: 1 point every 20 for speed
+            sampled_points = full_coords[::20] 
+            
+            route_risks = []
+            for lat, lon in sampled_points:
+                road_iso = get_road_isolation(lat, lon)
+                poi_inv = get_poi_inverse(lat, lon)
+                
+                risk = (0.35 * incident_density + 0.20 * road_iso + 
+                        0.10 * weather_severity + 0.15 * poi_inv + 0.10 * night_factor)
+                route_risks.append(risk)
+                
+            avg_risk = sum(route_risks) / len(route_risks)
+            
+            routes_analysis.append({
+                "route_id": idx + 1,
+                "average_risk": round(avg_risk, 3),
+                "geometry": full_coords
+            })
+
+        safest = min(routes_analysis, key=lambda x: x["average_risk"])
+        return safest["geometry"]
+
+    except Exception as e:
+        # Catching connection errors to external APIs
+        raise HTTPException(status_code=500, detail=str(e))
