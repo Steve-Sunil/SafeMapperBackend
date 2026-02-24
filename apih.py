@@ -101,32 +101,8 @@ def get_night_factor(daily_data):
     except Exception:
         return 0.5
 
-@app.get("/risk")
-async def calculate_risk(lat: float, lon: float, userReports: float = 0):
-    incidentDensity = get_incident_density(lat, lon)
-    weatherSeverity, daily_data = get_weather_severity(lat, lon)
-    roadIsolation = get_road_isolation(lat, lon)
-    poiDensityInverse = get_poi_inverse(lat, lon)
-    nightFactor = get_night_factor(daily_data)
+pari = 0.0
 
-    risk = (
-        0.35 * incidentDensity +
-        0.20 * roadIsolation +
-        0.10 * weatherSeverity +
-        0.15 * poiDensityInverse +
-        0.10 * nightFactor +
-        0.10 * userReports
-    )
-
-    return {
-        "incidentDensity": float(incidentDensity),
-        "roadIsolation": float(roadIsolation),
-        "weatherSeverity": float(weatherSeverity),
-        "poiDensityInverse": float(poiDensityInverse),
-        "nightFactor": float(nightFactor),
-        "userReports": float(userReports),
-        "finalRiskScore": round(float(risk), 3)
-    }
 
 cache = {"weather": None, "gdacs": None, "last_update": 0}
 
@@ -209,8 +185,14 @@ async def find_safest_route():
             })
 
         safest = min(routes_analysis, key=lambda x: x["average_risk"])
+        global pari
+        pari = safest["average_risk"]
         return safest["geometry"]
 
     except Exception as e:
         # Catching connection errors to external APIs
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/risk")
+async def calculate_risk():
+    return pari
