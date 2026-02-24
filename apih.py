@@ -195,4 +195,4 @@ async def find_safest_route():
 
 @app.get("/risk")
 async def calculate_risk():
-    return pari
+    return {"riskScore": pari}
